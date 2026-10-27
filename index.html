@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/filter.css">
+<link rel="stylesheet" href="css/nouislider.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/tailDT.js"></script>
+<script src="js/nouislider.min.js"></script>
+<script src="js/wNumb.js"></script>
+        <script src="data/Governorates_0.js"></script>
+        <script src="data/EGY_roads_1.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: 'rgba(255, 255, 0, 1.00)',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: 'rgba(255, 255, 0, 1.00)',
+                fillOpacity: 1
+              });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:20, minZoom:1
+        }).fitBounds([[20.638139230258535,23.0644947122951],[31.91960170602974,38.09922506801189]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    var img = popup._contentNode.querySelector('td img');
+                    if (img) {
+                        // If already loaded (cache), update immediately
+                        if (img.complete && img.naturalHeight > 0) {
+                            popup.update();
+                        } else {
+                            img.addEventListener('load', function() {
+                                popup.update();
+                            });
+                            img.addEventListener('error', function() {
+                                popup.update();
+                            });
+                        }
+                    }
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        function pop_Governorates_0(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['OBJECTID'] !== null ? autolinker.link(String(feature.properties['OBJECTID']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Gov_A_Name</th>\
+                        <td>' + (feature.properties['Gov_A_Name'] !== null ? autolinker.link(String(feature.properties['Gov_A_Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['GOV_CODE'] !== null ? autolinker.link(String(feature.properties['GOV_CODE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Orientatio'] !== null ? autolinker.link(String(feature.properties['Orientatio']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Degree'] !== null ? autolinker.link(String(feature.properties['Degree']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Gov_E_Name'] !== null ? autolinker.link(String(feature.properties['Gov_E_Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Shape_Leng'] !== null ? autolinker.link(String(feature.properties['Shape_Leng']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Shape_Area'] !== null ? autolinker.link(String(feature.properties['Shape_Area']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Governorates_0_0(feature) {
+            switch(String(feature.properties['Gov_A_Name'])) {
+                case 'اسوان':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,25,28,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'اسيوط':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(221,47,38,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الاسكندريه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(226,69,48,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الاسماعيليه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(232,91,59,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الاقصر':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(238,113,69,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'البحر الاحمر':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(243,135,79,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'البحيره':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(249,157,89,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الجيزه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,177,100,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الدقهليه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,189,114,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'السويس':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,201,128,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الشرقيه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,213,142,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الغربيه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,225,156,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الفيوم':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,237,170,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'القاهره':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,249,184,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'القليوبيه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(249,252,189,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'المنوفيه':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(236,247,185,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'المنيا':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(224,242,181,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'الوادي الجديد':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(211,237,177,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'بنى سويف':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(199,232,173,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'بورسعيد':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(187,227,169,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'جنوب سيناء':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(174,222,165,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'دمياط':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(157,211,166,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'سوهاج':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(138,198,170,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'شمال سيناء':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(119,184,173,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'قنا':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(100,171,176,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'كفر الشيخ':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(81,158,179,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'مطروح':
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(62,144,183,1.0)',
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_Governorates_0',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(43,131,186,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Governorates_0');
+        map.getPane('pane_Governorates_0').style.zIndex = 400;
+        map.getPane('pane_Governorates_0').style['mix-blend-mode'] = 'normal';
+        var layer_Governorates_0 = new L.geoJson(json_Governorates_0, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Governorates_0',
+            layerName: 'layer_Governorates_0',
+            pane: 'pane_Governorates_0',
+            onEachFeature: pop_Governorates_0,
+            style: style_Governorates_0_0,
+        });
+        bounds_group.addLayer(layer_Governorates_0);
+        map.addLayer(layer_Governorates_0);
+        function pop_EGY_roads_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['MED_DESCRI'] !== null ? autolinker.link(String(feature.properties['MED_DESCRI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['RTT_DESCRI'] !== null ? autolinker.link(String(feature.properties['RTT_DESCRI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['F_CODE_DES'] !== null ? autolinker.link(String(feature.properties['F_CODE_DES']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['ISO'] !== null ? autolinker.link(String(feature.properties['ISO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['ISOCOUNTRY'] !== null ? autolinker.link(String(feature.properties['ISOCOUNTRY']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_EGY_roads_1_0() {
+            return {
+                pane: 'pane_EGY_roads_1',
+                opacity: 1,
+                color: 'rgba(152,125,183,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 1.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_EGY_roads_1');
+        map.getPane('pane_EGY_roads_1').style.zIndex = 401;
+        map.getPane('pane_EGY_roads_1').style['mix-blend-mode'] = 'normal';
+        var layer_EGY_roads_1 = new L.geoJson(json_EGY_roads_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_EGY_roads_1',
+            layerName: 'layer_EGY_roads_1',
+            pane: 'pane_EGY_roads_1',
+            onEachFeature: pop_EGY_roads_1,
+            style: style_EGY_roads_1_0,
+        });
+        bounds_group.addLayer(layer_EGY_roads_1);
+        map.addLayer(layer_EGY_roads_1);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+            {label: '<img src="legend/EGY_roads_1.png" /> EGY_roads', layer: layer_EGY_roads_1},
+            {label: 'Governorates<br /><table><tr><td style="text-align: center;"><img src="legend/Governorates_0_اسوان0.png" /></td><td>اسوان</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_اسيوط1.png" /></td><td>اسيوط</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الاسكندريه2.png" /></td><td>الاسكندريه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الاسماعيليه3.png" /></td><td>الاسماعيليه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الاقصر4.png" /></td><td>الاقصر</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_البحرالاحمر5.png" /></td><td>البحر الاحمر</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_البحيره6.png" /></td><td>البحيره</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الجيزه7.png" /></td><td>الجيزه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الدقهليه8.png" /></td><td>الدقهليه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_السويس9.png" /></td><td>السويس</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الشرقيه10.png" /></td><td>الشرقيه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الغربيه11.png" /></td><td>الغربيه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الفيوم12.png" /></td><td>الفيوم</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_القاهره13.png" /></td><td>القاهره</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_القليوبيه14.png" /></td><td>القليوبيه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_المنوفيه15.png" /></td><td>المنوفيه</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_المنيا16.png" /></td><td>المنيا</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_الواديالجديد17.png" /></td><td>الوادي الجديد</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_بنىسويف18.png" /></td><td>بنى سويف</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_بورسعيد19.png" /></td><td>بورسعيد</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_جنوبسيناء20.png" /></td><td>جنوب سيناء</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_دمياط21.png" /></td><td>دمياط</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_سوهاج22.png" /></td><td>سوهاج</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_شمالسيناء23.png" /></td><td>شمال سيناء</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_قنا24.png" /></td><td>قنا</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_كفرالشيخ25.png" /></td><td>كفر الشيخ</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_مطروح26.png" /></td><td>مطروح</td></tr><tr><td style="text-align: center;"><img src="legend/Governorates_0_27.png" /></td><td></td></tr></table>', layer: layer_Governorates_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: false, 
+        });
+        lay.addTo(map);
+		document.addEventListener("DOMContentLoaded", function() {
+            // set new Layers List height which considers toggle icon
+            function newLayersListHeight() {
+                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
+                if (layerScrollbarElement) {
+                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
+                    var originalHeight = layersListElement.style.height 
+                        || window.getComputedStyle(layersListElement).height;
+                    var newHeight = parseFloat(originalHeight) - 50;
+                    layersListElement.style.height = newHeight + 'px';
+                }
+            }
+            var isLayersListExpanded = true;
+            var controlLayersElement = document.querySelector('.leaflet-control-layers');
+            var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
+            // toggle Collapsed/Expanded and apply new Layers List height
+            toggleLayerControl.addEventListener('click', function() {
+                if (isLayersListExpanded) {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                } else {
+                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+                }
+                isLayersListExpanded = !isLayersListExpanded;
+                newLayersListHeight()
+            });	
+			// apply new Layers List height if toggle layerstree
+			if (controlLayersElement) {
+				controlLayersElement.addEventListener('click', function(event) {
+					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
+					if (toggleLayerHeaderPointer) {
+						newLayersListHeight();
+					}
+				});
+			}
+            // Collapsed/Expanded at Start to apply new height
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            // Collapsed touch/small screen
+            var isSmallScreen = window.innerWidth < 650;
+            if (isSmallScreen) {
+                setTimeout(function() {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                    isLayersListExpanded = !isLayersListExpanded;
+                }, 500);
+            }  
+        });       
+        setBounds();
+        var i = 0;
+        layer_Governorates_0.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Gov_A_Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Gov_A_Name']).replace(/\\n/g, '<br>') + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Governorates_0'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var mapDiv = document.getElementById('map');
+        var row = document.createElement('div');
+        row.className="row";
+        row.id="all";
+        row.style.height = "100%";
+        var col1 = document.createElement('div');
+        col1.className="col9";
+        col1.id = "mapWindow";
+        col1.style.height = "99%";
+        col1.style.width = "80%";
+        col1.style.display = "inline-block";
+        var col2 = document.createElement('div');
+        col2.className="col3";
+        col2.id = "menu";
+        col2.style.display = "inline-block";
+        mapDiv.parentNode.insertBefore(row, mapDiv);
+        document.getElementById("all").appendChild(col1);
+        document.getElementById("all").appendChild(col2);
+        col1.appendChild(mapDiv)
+        var Filters = {"Gov_E_Name": "str"};
+        function filterFunc() {
+          map.eachLayer(function(lyr){
+          if ("options" in lyr && "dataVar" in lyr["options"]){
+            features = this[lyr["options"]["dataVar"]].features.slice(0);
+            try{
+              for (key in Filters){
+                keyS = key.replace(/[^a-zA-Z0-9_]/g, "")
+                if (Filters[key] == "str" || Filters[key] == "bool"){
+                  var selection = [];
+                  var options = document.getElementById("sel_" + keyS).options
+                  for (var i=0; i < options.length; i++) {
+                    if (options[i].selected) selection.push(options[i].value);
+                  }
+                    try{
+                      if (key in features[0].properties){
+                        for (i = features.length - 1;
+                          i >= 0; --i){
+                          if (selection.indexOf(
+                          features[i].properties[key])<0
+                          && selection.length>0) {
+                          features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                  }
+                }
+                if (Filters[key] == "int"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (parseInt(features[i].properties[key])
+                          < sliderVals[0]
+                          || parseInt(features[i].properties[key])
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "real"){
+                  sliderVals =  document.getElementById(
+                    "div_" + keyS).noUiSlider.get();
+                  try{
+                    if (key in features[0].properties){
+                    for (i = features.length - 1; i >= 0; --i){
+                      if (features[i].properties[key]
+                          < sliderVals[0]
+                          || features[i].properties[key]
+                          > sliderVals[1]){
+                            features.splice(i,1);
+                          }
+                        }
+                      }
+                    } catch(err){
+                    }
+                  }
+                if (Filters[key] == "date"
+                  || Filters[key] == "datetime"
+                  || Filters[key] == "time"){
+                  try{
+                    if (key in features[0].properties){
+                      HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, '');
+                      startdate = document.getElementById("dat_" +
+                        HTMLkey + "_date1").value.replace(" ", "T");
+                      enddate = document.getElementById("dat_" +
+                        HTMLkey + "_date2").value.replace(" ", "T");
+                      for (i = features.length - 1; i >= 0; --i){
+                        if (features[i].properties[key] < startdate
+                          || features[i].properties[key] > enddate){
+                          features.splice(i,1);
+                        }
+                      }
+                    }
+                  } catch(err){
+                  }
+                }
+              }
+            } catch(err){
+            }
+          this[lyr["options"]["layerName"]].clearLayers();
+          this[lyr["options"]["layerName"]].addData(features);
+        var i = 0;
+        layer_Governorates_0.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Gov_A_Name'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Gov_A_Name']).replace(/\\n/g, '<br>') + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Governorates_0'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+          }
+          })
+        }
+            document.getElementById("menu").appendChild(
+                document.createElement("div"));
+            var div_Gov_E_Name = document.createElement('div');
+            div_Gov_E_Name.id = "div_Gov_E_Name";
+            div_Gov_E_Name.className= "filterselect";
+            document.getElementById("menu").appendChild(div_Gov_E_Name);
+            sel_Gov_E_Name = document.createElement('select');
+            sel_Gov_E_Name.multiple = true;
+            sel_Gov_E_Name.size = 10;
+            sel_Gov_E_Name.id = "sel_Gov_E_Name";
+            var Gov_E_Name_options_str = "<option value='' unselected></option>";
+            sel_Gov_E_Name.onchange = function(){filterFunc()};
+            Gov_E_Name_options_str  += '<option value="Alexandria">Alexandria</option>';
+            Gov_E_Name_options_str  += '<option value="Aswan">Aswan</option>';
+            Gov_E_Name_options_str  += '<option value="Asyut">Asyut</option>';
+            Gov_E_Name_options_str  += '<option value="Bani Sweif">Bani Sweif</option>';
+            Gov_E_Name_options_str  += '<option value="Behira">Behira</option>';
+            Gov_E_Name_options_str  += '<option value="Cairo">Cairo</option>';
+            Gov_E_Name_options_str  += '<option value="Dakahlia">Dakahlia</option>';
+            Gov_E_Name_options_str  += '<option value="Damietta SD">Damietta SD</option>';
+            Gov_E_Name_options_str  += '<option value="Fayoum">Fayoum</option>';
+            Gov_E_Name_options_str  += '<option value="Gharbia">Gharbia</option>';
+            Gov_E_Name_options_str  += '<option value="Giza">Giza</option>';
+            Gov_E_Name_options_str  += '<option value="Ismailia">Ismailia</option>';
+            Gov_E_Name_options_str  += '<option value="Kafr El-Sheikh">Kafr El-Sheikh</option>';
+            Gov_E_Name_options_str  += '<option value="Luxor">Luxor</option>';
+            Gov_E_Name_options_str  += '<option value="Matroh">Matroh</option>';
+            Gov_E_Name_options_str  += '<option value="Menoufia">Menoufia</option>';
+            Gov_E_Name_options_str  += '<option value="Minya">Minya</option>';
+            Gov_E_Name_options_str  += '<option value="N-Sini">N-Sini</option>';
+            Gov_E_Name_options_str  += '<option value="Port Said">Port Said</option>';
+            Gov_E_Name_options_str  += '<option value="Qalyubia">Qalyubia</option>';
+            Gov_E_Name_options_str  += '<option value="S-Sini">S-Sini</option>';
+            Gov_E_Name_options_str  += '<option value="Sharkia">Sharkia</option>';
+            Gov_E_Name_options_str  += '<option value="Sohag">Sohag</option>';
+            Gov_E_Name_options_str  += '<option value="Suze">Suze</option>';
+            Gov_E_Name_options_str  += '<option value="The Red Sea">The Red Sea</option>';
+            Gov_E_Name_options_str  += '<option value="qana">qana</option>';
+            Gov_E_Name_options_str  += '<option value="the new Valley">the new Valley</option>';
+            sel_Gov_E_Name.innerHTML = Gov_E_Name_options_str;
+            div_Gov_E_Name.appendChild(sel_Gov_E_Name);
+            var lab_Gov_E_Name = document.createElement('div');
+            lab_Gov_E_Name.innerHTML = 'Gov_E_Name';
+            lab_Gov_E_Name.className = 'filterlabel';
+            div_Gov_E_Name.appendChild(lab_Gov_E_Name);
+            var reset_Gov_E_Name = document.createElement('div');
+            reset_Gov_E_Name.innerHTML = 'clear filter';
+            reset_Gov_E_Name.className = 'filterlabel';
+            reset_Gov_E_Name.onclick = function() {
+                var options = document.getElementById("sel_Gov_E_Name").options;
+                for (var i=0; i < options.length; i++) {
+                    options[i].selected = false;
+                }
+                filterFunc();
+            };
+            div_Gov_E_Name.appendChild(reset_Gov_E_Name);
+        resetLabels([layer_Governorates_0]);
+        map.on("zoomend", function(){
+            resetLabels([layer_Governorates_0]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_Governorates_0]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_Governorates_0]);
+        });
+        </script>        
+    </body>
+</html>
